@@ -405,7 +405,7 @@ class TimeshiftsGPR:
         save_model(filename): Save the fitted model to a file.
     """
 
-    def __init__(self, training_params=None, training_timeshifts=None):
+    def __init__(self, training_params = None, training_timeshifts = None):
         """
         Initialize the TimeshiftsGPR model with training data.
         
@@ -447,7 +447,7 @@ class TimeshiftsGPR:
         scaled_params = self.scaler.transform(params)
         return self.regressor.predict(scaled_params)
     
-    def save_model(self, filename):
+    def save_model(self, filename: str):
         """
         Save the fitted model to a file.
         
@@ -457,7 +457,7 @@ class TimeshiftsGPR:
 
     
     @classmethod
-    def load_model(cls, filename):
+    def load_model(cls, filename: str):
         """
         Load a model from a file.
         
