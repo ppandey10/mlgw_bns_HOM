@@ -37,15 +37,6 @@ H_callable = Callable[[np.ndarray, float, float, float, float], np.ndarray]
 
 Callable_Waveform = Callable[[WaveformParameters, np.ndarray], np.ndarray]
 
-# In Python, a dictionary is a collection that allows us to store data in key: value pairs.
-# _post_newtonian_amplitudes_by_mode: dict[Mode, Callable_Waveform] = {
-#     Mode(2, 2): amp_lm(H_22, Mode(2, 2)),
-# }
-# _post_newtonian_phases_by_mode: dict[Mode, Callable_Waveform] = {
-#     Mode(2, 2): phi_lm(Mode(2, 2)),
-# }
-
-
 class Mode(NamedTuple):
     """A mode in the harmonic decomposition of the GW emission from a system."""
 
@@ -568,7 +559,7 @@ def psi_lm(mode: Mode):
         )
     return function
 
-# In Python, a dictionary is a collection that allows us to store data in key: value pairs.
+# TODO: Improve!
 _post_newtonian_amplitudes_by_mode: dict[Mode, Callable_Waveform] = {
     Mode(2, 1): amp_lm(H_21, Mode(2, 1)),
     Mode(2, 2): amp_lm(H_22, Mode(2, 2)),
