@@ -217,14 +217,14 @@ class ValidateModel:
 
         if include_time_shifts:
             pred_phase_0 = np.copy(predicted_waveforms.phases)
-            predicted_waveforms.phases += ((
+            predicted_waveforms.phases += (
                 2 * np.pi 
                 * (
                     self.model.dataset.frequencies_hz[self.model.downsampling_indices.phase_indices] 
                    - self.model.dataset.frequencies_hz[self.model.downsampling_indices.phase_indices][0]
                 )
                 * self.time_shifts_predictor().predict(self.parameter_set.parameter_array).reshape(-1, 1)
-            ) - pred_phase_0[:,0].reshape(-1, 1))
+            )
 
         return self.mismatch_array(true_waveforms, predicted_waveforms)
 
@@ -262,12 +262,6 @@ class ValidateModel:
             self.model.downsampling_training,
             self.model.downsampling_indices,
         )
-
-        # cartesian_2 *= np.exp(
-        #     2j * np.pi 
-        #     * self.time_shifts_predictor().predict(self.parameter_set.parameter_array).reshape(-1, 1) 
-        #     * self.frequencies
-        # )
 
         return [
             self.mismatch(waveform_1, waveform_2)
