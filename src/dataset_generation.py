@@ -11,6 +11,8 @@ from typing import Any, Callable, ClassVar, Optional, Type, Union
 import h5py
 import numpy as np
 from numpy.random import default_rng
+from joblib import Parallel, delayed
+from tqdm_joblib import tqdm_joblib
 from tqdm import tqdm  # type: ignore
 
 from .data_management import (
@@ -1091,17 +1093,28 @@ class Dataset:
         else:
             parameter_generator = self.parameter_generator
 
-        for i in tqdm(range(size), unit="residuals"):
-            params = next(parameter_generator)
+        # Step 1: generate parameters
+        parameters = [next(parameter_generator) for _ in tqdm(range(size), desc="Generating parameters")]
 
-            (
-                amp_residuals[i],
-                phi_residuals[i],
-            ) = self.waveform_generator.generate_residuals(
+        # Helper function for parallel execution
+        def generate_single(i_param):
+            i, params = i_param
+            amp_res, phi_res = self.waveform_generator.generate_residuals(
                 params, self.frequencies, downsampling_indices
             )
+            return i, amp_res, phi_res, params.array
 
-            parameter_array[i] = params.array
+        # Step 2: generate residuals in parallel
+        with tqdm_joblib(tqdm(desc="Generating residuals", total=size, unit="residuals")):
+            results = Parallel(n_jobs=-1)(
+                delayed(generate_single)(i_param) for i_param in enumerate(parameters)
+            )
+
+        # Step 3: fill arrays, with progress bar
+        for i, amp_res, phi_res, param_array in tqdm(results, desc="Filling arrays", total=size, unit="samples"):
+            amp_residuals[i] = amp_res
+            phi_residuals[i] = phi_res
+            parameter_array[i] = param_array
 
         residuals = Residuals(amp_residuals, phi_residuals)
 
