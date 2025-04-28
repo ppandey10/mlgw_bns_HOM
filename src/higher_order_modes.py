@@ -35,7 +35,7 @@ from .taylorf2 import(
 from .spherical_harmonics import * 
 from .data_management import phase_unwrapping
 
-from .pn_waveforms import (
+from .pn_modes import (
     Mode,
    _post_newtonian_amplitudes_by_mode,
    _post_newtonian_phases_by_mode 
@@ -115,7 +115,7 @@ class TEOBResumSModeGenerator(BarePostNewtonianModeGenerator):
         super().__init__(*args, **kwargs)
         self.eobrun_callable = eobrun_callable
 
-    def full_effective_one_body_waveform(
+    def get_polarizations(
         self, params: "WaveformParameters", frequencies: Optional[np.ndarray] = None
     )-> tuple[np.ndarray, np.ndarray, np.ndarray]:
         assert self.mode is not None

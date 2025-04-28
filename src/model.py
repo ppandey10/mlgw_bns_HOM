@@ -62,7 +62,7 @@ MODES_MODELS_AVAILABLE = ["pp_small_default_l2_m2", "pp_large_default_l2_m2"]
 DEFAULT_DATASET_BASENAME = "data/default"
 
 time_shifts_predictor = TimeshiftsGPR().load_model(
-    filename="/home/ge73qip/playground/mlgw_bns/time_shifts/ts_model_15_01_25_comp_pool.pkl"
+    filename="ts_model_HOM_comp_pool.pkl"
 )
 
 class FrequencyTooLowError(ValueError):

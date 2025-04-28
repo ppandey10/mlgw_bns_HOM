@@ -151,13 +151,13 @@ class WaveformGenerator(ABC):
                 (so, not constrained between 0 and 2pi).
         """
 
-    @abstractmethod
-    def full_effective_one_body_waveform(
-        self, params: "WaveformParameters", frequencies: Optional[np.ndarray] = None
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        r"""
-        Full EOB. TODO: update!
-        """
+    # @abstractmethod
+    # def full_effective_one_body_waveform(
+    #     self, params: "WaveformParameters", frequencies: Optional[np.ndarray] = None
+    # ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    #     r"""
+    #     Full EOB. TODO: update!
+    #     """
 
     def generate_residuals(
         self,
