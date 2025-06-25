@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, ClassVar, Optional, Type, Union
 
+import matplotlib.pyplot as plt
 import h5py
 import numpy as np
 from numpy.random import default_rng
@@ -34,6 +35,8 @@ from .taylorf2 import (
     phase_5h_post_newtonian_tidal,
 )
 
+from .special_func import dynamic_then_uniform_grid
+
 TF2_BASE: float = 3.668693487138444e-19
 # ( Msun * G / c**3)**(5/6) * Hz**(-7/6) * c / Mpc / s
 AMP_SI_BASE: float = 4.2425873413901263e24
@@ -59,8 +62,12 @@ class WaveformGenerator(ABC):
 
     def __init__(self):
         # self.frequencies: Optional[np.ndarray] = None
-        self.frequencies: Optional[np.ndarray] = np.arange(20, 2048, 0.0007153125) * 1.3791374655266094e-05
-        # self.frequencies: Optional[np.ndarray] = np.arange(20, 2048, 0.001153125) * 1.3791374655266094e-05
+        self.frequencies: Optional[np.ndarray] = dynamic_then_uniform_grid(
+            f_min=16, f_switch=500, f_max=2900,
+            alpha=2e-5, beta=1e-6,
+            uniform_step=1e-1
+        ) * 1.3791374655266094e-05
+        # self.frequencies: Optional[np.ndarray] = np.arange(16, 2900, 0.0003153125) * 1.3791374655266094e-05
 
     @abstractmethod
     def post_newtonian_amplitude(
@@ -801,10 +808,7 @@ class Dataset:
         self.initial_frequency_hz = initial_frequency_hz
         self.srate_hz = srate_hz
 
-        (
-            self.effective_initial_frequency_hz,
-            self.effective_srate_hz,
-        ) = expand_frequency_range(
+        (self.effective_initial_frequency_hz, self.effective_srate_hz) = expand_frequency_range(
             initial_frequency_hz,
             srate_hz,
             parameter_ranges.mass_range,
@@ -879,6 +883,7 @@ class Dataset:
             return self.natural_units_to_hz(self.waveform_generator.frequencies)
 
         if self.multibanding:
+            print("there is multibanding!")
             return reduced_frequency_array(
                 self.effective_initial_frequency_hz,
                 self.effective_srate_hz / 2,

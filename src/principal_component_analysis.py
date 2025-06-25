@@ -15,7 +15,7 @@ from .dataset_generation import Dataset
 from .neural_network import TimeshiftsGPR
 
 time_shifts_predictor = TimeshiftsGPR().load_model(
-    filename="ts_model_HOM_comp_pool.pkl"
+    filename="/beegfs/ge73qip/msc_thesis/mlgw_bns_HOM/ts_model_HOM_comp_pool.pkl"
 )
 
 

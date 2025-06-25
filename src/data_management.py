@@ -454,7 +454,7 @@ class FDWaveforms(SavableData):
 
 
 def phase_unwrapping(
-    waveform_cartesian: np.ndarray, eps: float = 1e-2, set_zero_at_start: bool = True
+    waveform_cartesian: np.ndarray, eps: float = 1e-1, set_zero_at_start: bool = True
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Starting from an array of cartesian-form complex numbers,

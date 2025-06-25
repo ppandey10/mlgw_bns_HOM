@@ -114,3 +114,49 @@ def unwrap_euler(p):
         dphi = 0.0
 
     return p  # Return the unwrapped array
+
+def dynamic_then_uniform_grid(
+        f_min: float,
+        f_switch: float,
+        f_max: float,
+        alpha: float = 1e-6,
+        beta: float = 1e-4,
+        uniform_step: float = 1e-4
+    ) -> np.ndarray:
+    
+    # Build non-uniform grid up to f_switch
+    freqs = [f_min]
+    while freqs[-1] < f_switch:
+        step = alpha * freqs[-1] + beta
+        next_freq = freqs[-1] + step
+        if next_freq > f_switch:
+            break
+        freqs.append(next_freq)
+    non_uniform_part = np.array(freqs)
+    
+    # Build uniform grid from f_switch to f_max
+    # Include f_switch if it is not already in non_uniform_part
+    if not np.isclose(non_uniform_part[-1], f_switch):
+        uniform_start = f_switch
+    else:
+        uniform_start = non_uniform_part[-1]
+    
+    uniform_part = np.arange(uniform_start, f_max + uniform_step, uniform_step)
+    
+    # Concatenate both parts, avoid duplicates at the boundary
+    if np.isclose(non_uniform_part[-1], uniform_part[0]):
+        combined = np.concatenate([non_uniform_part, uniform_part[1:]])
+    else:
+        combined = np.concatenate([non_uniform_part, uniform_part])
+    
+    return combined
+
+def reduced_tidal_parameter(lambda1, lambda2, mass_ratio):
+    """
+    Compute the reduced tidal parameter for a given lambda1, lambda2, and total mass.
+    """
+    total_mass = 2.8
+    m1 = total_mass / (1 + mass_ratio)
+    m2 = total_mass - m1
+    lam = 16 / (13 * total_mass ** 5) * ((m1 + 12 * m2) * m1 ** 4 * lambda1 + (m2 + 12 * m1) * m2 ** 4 * lambda2)
+    return lam

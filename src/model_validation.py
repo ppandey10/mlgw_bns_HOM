@@ -32,12 +32,20 @@ class ValidateModel:
             Name of the power spectral density to use in the computation
             of the mismatches.
             Currently only 'ET' (default) is supported
+    custom_frequencies: bool
+            Whether the model is trained on the custom frequencies of the dataset,
+            or the default frequencies of the dataset.
+            Defaults to True.
+            If False, the model is trained on the default frequencies of the dataset.
+            This is useful for comparing the model to the EOB waveforms,
+            since the EOB waveforms are computed at the default frequencies of the dataset.
     """
 
     def __init__(
         self,
         model: Model,
         psd_name: str = "ET",
+        custom_frequencies: bool = True,
     ):
 
         self.model = model
@@ -45,12 +53,20 @@ class ValidateModel:
         self.psd_data = np.loadtxt(PSD_PATH / f"{self.psd_name}_psd.txt")
 
         all_frequencies = self.psd_data[:, 0]
-        mask = np.where(
-            np.logical_and(
-                all_frequencies < self.model.dataset.effective_srate_hz / 2,
-                all_frequencies > self.model.dataset.effective_initial_frequency_hz,
+        if custom_frequencies:
+            mask = np.where(
+                np.logical_and(
+                    all_frequencies < self.model.dataset.frequencies_hz[-1] + 10,
+                    all_frequencies > self.model.dataset.frequencies_hz[0] - 0.5,
+                )
             )
-        )
+        else:
+            mask = np.where(
+                np.logical_and(
+                    all_frequencies < self.model.dataset.effective_srate_hz / 2,
+                    all_frequencies > self.model.dataset.effective_initial_frequency_hz,
+                )
+            )
 
         self.frequencies = self.psd_data[:, 0][mask]
         self.psd_values = self.psd_data[:, 1][mask]
@@ -76,7 +92,7 @@ class ValidateModel:
     
     def time_shifts_predictor(self):
         """Predict the time shifts for a given set of parameters"""
-        return TimeshiftsGPR().load_model("/home/ge73qip/playground/mlgw_bns/time_shifts/ts_model_14_01_25_comp_pool.pkl")
+        return TimeshiftsGPR().load_model(filename="/beegfs/ge73qip/msc_thesis/mlgw_bns_HOM/ts_model_HOM_comp_pool.pkl")
 
     def param_set(
         self, number_of_parameter_tuples: int, seed: Optional[int] = None
@@ -217,14 +233,19 @@ class ValidateModel:
 
         if include_time_shifts:
             pred_phase_0 = np.copy(predicted_waveforms.phases)
-            predicted_waveforms.phases += (
+            predicted_waveforms.phases += ((
                 2 * np.pi 
                 * (
                     self.model.dataset.frequencies_hz[self.model.downsampling_indices.phase_indices] 
                    - self.model.dataset.frequencies_hz[self.model.downsampling_indices.phase_indices][0]
                 )
                 * self.time_shifts_predictor().predict(self.parameter_set.parameter_array).reshape(-1, 1)
-            )
+            ) - pred_phase_0[:,0].reshape(-1, 1))
+
+            # plt.plot(self.model.dataset.frequencies_hz[self.model.downsampling_indices.phase_indices], (predicted_waveforms.phases - true_waveforms.phases)[0])
+            # plt.plot(self.model.dataset.frequencies_hz[self.model.downsampling_indices.amplitude_indices], (np.log(predicted_waveforms.amplitudes/true_waveforms.amplitudes)[0]), linestyle='--')
+            # plt.xscale("log")
+            # plt.savefig('phase_diff.png', bbox_inches='tight')
 
         return self.mismatch_array(true_waveforms, predicted_waveforms)
 
@@ -312,7 +333,7 @@ class ValidateModel:
         waveform_1: np.ndarray,
         waveform_2: np.ndarray,
         frequencies: Optional[np.ndarray] = None,
-        max_delta_t: float = 0.07, # 0.000007
+        max_delta_t: float = 0.007, # 0.000007
     ) -> float:
         r"""Compute the mismatch between two Cartesian waveforms.
 

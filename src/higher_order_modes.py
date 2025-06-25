@@ -17,7 +17,6 @@ from typing import Callable, NamedTuple, Optional
 
 import numpy as np
 from scipy.special import factorial  # type: ignore
-import lal
 
 # The '.' is a shortcut -
 # that tells it to search in the current package - 
@@ -28,10 +27,6 @@ from .dataset_generation import (
     WaveformParameters
 )
 
-from .taylorf2 import(
-    amplitude_3h_post_newtonian,
-    phase_5h_post_newtonian_tidal
-)
 from .spherical_harmonics import * 
 from .data_management import phase_unwrapping
 
@@ -40,9 +35,6 @@ from .pn_modes import (
    _post_newtonian_amplitudes_by_mode,
    _post_newtonian_phases_by_mode 
 )
-
-# Callable_Waveform = Callable[[WaveformParameters, np.ndarray], np.ndarray]
-
 
 # all modes with l<5, m>0 are supported by TEOB
 EOB_SUPPORTED_MODES = [Mode(l, m) for l in range(2, 5) for m in range(1, l + 1)]
@@ -150,20 +142,12 @@ class TEOBResumSModeGenerator(BarePostNewtonianModeGenerator):
         par_dict["use_mode_lm"] = [1, 4, 0, 8]
         par_dict["inclination"] = np.pi / 3
 
-        # print(without_keys(par_dict, {"freqs"}))
-        f_spa, hp_re, hp_im, hc_re, hc_im, hflm, htlm, _ = self.eobrun_callable(par_dict)
-
-        # print(without_keys(par_dict, {"freqs"}))
-        # amplitude = hflm[str(mode_to_k(self.mode))][0][to_slice] * params.eta 
-        # phase = - hflm[str(mode_to_k(self.mode))][1][to_slice]
+        print(without_keys(par_dict, {"freqs"}))
+        f_spa, hp_re, hp_im, hc_re, hc_im, _, _, _ = self.eobrun_callable(par_dict)
 
         hp = (hp_re - 1j * hp_im)[to_slice]
         hc = (hc_re - 1j * hc_im)[to_slice]
         h = (hp - 1j * hc)
-
-        # amp_full = np.abs(h)
-        # phase_full = np.unwrap(np.angle(h))
-        amp_full, phase_full = phase_unwrapping(h)
 
         f_spa = f_spa[to_slice]
         

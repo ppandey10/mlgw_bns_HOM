@@ -33,6 +33,7 @@ from .dataset_generation import (
     TEOBResumSGenerator,
     WaveformGenerator,
     WaveformParameters,
+    AMP_SI_BASE,
 )
 from .higher_order_modes import (
     BarePostNewtonianModeGenerator,
@@ -51,7 +52,7 @@ from .principal_component_analysis import (
 )
 from .taylorf2 import SUN_MASS_SECONDS, smoothing_func
 from .higher_order_modes import mode_to_k
-# from .taylorF2_HOM import *
+from .special_func import spinsphericalharm
 
 PRETRAINED_MODEL_FOLDER = "data/"
 MODELS_AVAILABLE = ["default", "fast"]
@@ -62,7 +63,7 @@ MODES_MODELS_AVAILABLE = ["pp_small_default_l2_m2", "pp_large_default_l2_m2"]
 DEFAULT_DATASET_BASENAME = "data/default"
 
 time_shifts_predictor = TimeshiftsGPR().load_model(
-    filename="ts_model_HOM_comp_pool.pkl"
+    filename="/beegfs/ge73qip/msc_thesis/mlgw_bns_HOM/ts_model_HOM_comp_pool.pkl"
 )
 
 class FrequencyTooLowError(ValueError):
@@ -957,11 +958,10 @@ class Model:
             resampled_phi = np.concatenate((resampled_phi, np.zeros(hf_segment_length)))
 
         amp = (
-            resampled_amp
+            resampled_amp 
+            * pre
+            / params.distance_mpc
         )
-        #     * pre
-        #     / params.distance_mpc
-        # )
 
         phi = (
             resampled_phi
@@ -1193,25 +1193,21 @@ class ModesModel:
     def predict(
         self, 
         frequencies: np.ndarray, 
-        params: ParametersWithExtrinsic
+        params: ParametersWithExtrinsic,
+        time_shifts: float,
         ) -> tuple[np.ndarray, np.ndarray]:
         """Predict the plus- and cross-polarized frequency-domain waveform corresponding to 
         the given parameters, accounting for the effects of the included modes.
         
         References: https://arxiv.org/pdf/2004.06503.pdf (appendix E) for the modes decomposition.
         """
-
-        h_plus = np.zeros_like(frequencies, dtype=np.complex64)
-        h_cross = np.zeros_like(frequencies, dtype=np.complex64)
-        
-        for mode, model in self.models.items():
-            amp, phi = model.predict_amplitude_phase(frequencies, params)
-            h_plus += h_plus_from_mode(amp, phi, mode, params.inclination, params.reference_phase)
-            h_cross += h_cross_from_mode(amp, phi, mode, params.inclination, params.reference_phase)
-        
-        return h_plus, h_cross
-
-
+        return compute_polarizations_from_modes(
+            model=self, 
+            params=params, 
+            frequencies=frequencies, 
+            time_shifts=time_shifts, 
+            inclination=params.inclination
+        )
 @njit
 def combine_amp_phase(
     amp: np.ndarray, phase: np.ndarray
@@ -1381,6 +1377,114 @@ def h_cross_from_mode(amp: np.ndarray, phi: np.ndarray, mode: Mode, inclination:
     )
 
     return h_cross_re + 1j * h_cross_im
+
+def compute_polarizations_from_modes(
+    model: ModesModel,
+    params: ParametersWithExtrinsic,
+    frequencies: np.ndarray,
+    time_shifts: np.ndarray,
+    inclination: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        
+    h_plus_real, h_plus_imag, h_cross_real, h_cross_imag = hpc_waveform(
+        model=model,
+        modes=model.modes,
+        parameters_extrinsic=params, 
+        freq_hz=frequencies, 
+        time_shifts=time_shifts, 
+        inclination=inclination
+    )
+    
+    eta = params.intrinsic(Dataset(20., 4096.)).eta # TODO: change it!
+
+    hp_pred = (h_plus_real + 1j * h_plus_imag) / eta / 2
+    hc_pred = (h_cross_real + 1j * h_cross_imag) / eta / 2
+    h_pred = (hp_pred - 1j * hc_pred)
+
+    return h_pred, hp_pred, hc_pred
+
+def hpc_waveform(
+    model: ModesModel,
+    modes: list[Mode], 
+    parameters_extrinsic: ParametersWithExtrinsic, 
+    freq_hz: np.ndarray, 
+    time_shifts: np.ndarray, 
+    inclination: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+    Ylm_real, Ylm_imag, Ylm_real_mneg, Ylm_imag_mneg = compute_Ylm_modes(modes, 0, inclination)
+
+    # Initialize empty arrays for results
+    h_plus_real = np.zeros_like(freq_hz)
+    h_plus_imag = np.zeros_like(freq_hz)
+    h_cross_real = np.zeros_like(freq_hz)
+    h_cross_imag = np.zeros_like(freq_hz)
+
+    for mode in modes:
+        # Compute amplitude and phase in one go
+        amp, phase = model.models[mode].predict_amplitude_phase(freq_hz, parameters_extrinsic)
+
+        # Vectorized phase adjustments
+        phase += 2 * np.pi * freq_hz * time_shifts 
+
+        # Compute trigonometric functions in a single operation
+        cosphi, sinphi = np.cos(phase), np.sin(phase)
+        cosphipm, sinphipm = np.cos(phase + np.pi / 2), np.sin(phase + np.pi / 2)
+
+        # Compute h_plus and h_cross using NumPy vectorized operations
+        if mode.l % 2:  # Odd l mode
+            h_plus_real += amp * (
+                cosphi * (Ylm_real[mode] - Ylm_real_mneg[mode.opposite()])
+                - sinphi * (Ylm_imag[mode] + Ylm_imag_mneg[mode.opposite()])
+            )
+            h_plus_imag += amp * (
+                cosphi * (Ylm_imag[mode] + Ylm_imag_mneg[mode.opposite()])
+                + sinphi * (Ylm_real[mode] - Ylm_real_mneg[mode.opposite()])
+            )
+            h_cross_real += amp * (
+                cosphipm * (Ylm_real[mode] + Ylm_real_mneg[mode.opposite()])
+                - sinphipm * (Ylm_imag[mode] - Ylm_imag_mneg[mode.opposite()])
+            )
+            h_cross_imag += amp * (
+                cosphipm * (Ylm_imag[mode] - Ylm_imag_mneg[mode.opposite()])
+                + sinphipm * (Ylm_real[mode] + Ylm_real_mneg[mode.opposite()])
+            )
+        else:  # Even l mode
+            h_plus_real += amp * (
+                cosphi * (Ylm_real[mode] + Ylm_real_mneg[mode.opposite()])
+                - sinphi * (Ylm_imag[mode] - Ylm_imag_mneg[mode.opposite()])
+            )
+            h_plus_imag += amp * (
+                cosphi * (Ylm_imag[mode] - Ylm_imag_mneg[mode.opposite()])
+                + sinphi * (Ylm_real[mode] + Ylm_real_mneg[mode.opposite()])
+            )
+            h_cross_real += amp * (
+                cosphipm * (Ylm_real[mode] - Ylm_real_mneg[mode.opposite()])
+                - sinphipm * (Ylm_imag[mode] + Ylm_imag_mneg[mode.opposite()])
+            )
+            h_cross_imag += amp * (
+                cosphipm * (Ylm_imag[mode] + Ylm_imag_mneg[mode.opposite()])
+                + sinphipm * (Ylm_real[mode] - Ylm_real_mneg[mode.opposite()])
+            )
+    
+    return h_plus_real, h_plus_imag, h_cross_real, h_cross_imag
+
+def compute_Ylm_modes(
+        modes: list[Mode], 
+        phi: float, 
+        iota: float
+    ) -> tuple[dict[Mode, np.ndarray], dict[Mode, np.ndarray], dict[Mode, np.ndarray], dict[Mode, np.ndarray]]:
+    
+    Ylm_real = {}
+    Ylm_imag = {}
+    Ylm_real_mneg = {}
+    Ylm_imag_mneg = {}
+    
+    for mode in modes:
+        Ylm_real[mode], Ylm_imag[mode] = spinsphericalharm(-2, mode.l, mode.m, phi, iota)
+        Ylm_real_mneg[mode.opposite()], Ylm_imag_mneg[mode.opposite()] = spinsphericalharm(-2, mode.l, -mode.m, phi, iota)
+    
+    return Ylm_real, Ylm_imag, Ylm_real_mneg, Ylm_imag_mneg
 
 def remove_linear_trend(parameters, phi_diff, frq):
     for i in range(parameters.parameter_array.shape[0]):
